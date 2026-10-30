@@ -1,13 +1,18 @@
 :root {
-  --ink: #1c293c;
-  --muted: #64748a;
-  --line: #dfe4eb;
-  --app-bg: #e9edf2;
-  --blue: #315cf4;
-  --blue-hover: #254bd5;
+  --ink: #f5f3ee;
+  --muted: #b6bec2;
+  --line: #30363a;
+  --app-bg: #0b0d0f;
+  --gold: #d6a84b;
+  --gold-highlight: #e7c36a;
+  --green: #35b779;
+  --amber: #e4a83a;
+  --red: #d9534f;
+  --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--ink);
   background: var(--app-bg);
+  color-scheme: dark;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -32,12 +37,13 @@ body {
 }
 
 button, input, textarea { font: inherit; }
+button, input, textarea, a { touch-action: manipulation; }
 
 button:focus-visible,
 a:focus-visible {
-  outline: 2px solid #315cf4;
+  outline: 2px solid var(--gold-highlight);
   outline-offset: 3px;
 }
 
-::selection { background: #dbe5ff; color: #172c69; }
+::selection { background: #554321; color: #fff3d4; }
 #root { min-height: 100vh; }

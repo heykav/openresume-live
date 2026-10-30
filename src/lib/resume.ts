@@ -91,6 +91,17 @@ function isResume(value: unknown): value is Resume {
   return validExperience && validEducation && value.skills.every(isString)
 }
 
+export function parseResumeJson(contents: string): Resume {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(contents)
+  } catch {
+    throw new Error('The selected file is not valid JSON. Choose an OpenResume JSON backup.')
+  }
+  if (!isResume(parsed)) throw new Error('The selected file is not a valid OpenResume draft. Choose a JSON backup exported from OpenResume.')
+  return parsed
+}
+
 export function readResume(storage?: Storage): LoadedDraft {
   let draftStorage: Storage | undefined
   try {

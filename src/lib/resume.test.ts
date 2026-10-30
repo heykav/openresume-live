@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_RESUME, readResume, saveResume, STORAGE_KEY } from './resume'
+import { DEFAULT_RESUME, parseResumeJson, readResume, saveResume, STORAGE_KEY } from './resume'
 
 function createStorage(initial: Record<string, string> = {}): Storage {
   const values = new Map(Object.entries(initial))
@@ -14,6 +14,13 @@ function createStorage(initial: Record<string, string> = {}): Storage {
 }
 
 describe('resume draft storage', () => {
+  it('validates imported JSON drafts before returning resume data', () => {
+    expect(parseResumeJson(JSON.stringify(DEFAULT_RESUME))).toEqual(DEFAULT_RESUME)
+    expect(() => parseResumeJson('{broken')).toThrow('The selected file is not valid JSON. Choose an OpenResume JSON backup.')
+    expect(() => parseResumeJson(JSON.stringify({ name: 'Incomplete draft' })))
+      .toThrow('The selected file is not a valid OpenResume draft. Choose a JSON backup exported from OpenResume.')
+  })
+
   it('starts with an independent sample draft when no saved content exists', () => {
     const first = readResume(createStorage())
     const second = readResume(createStorage())

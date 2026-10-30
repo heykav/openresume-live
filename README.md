@@ -13,10 +13,10 @@ npm run dev
 
 ## Work with your draft
 
-- Choose a section in the left rail and edit its fields. Add or remove experience and education entries as needed.
+- Choose a section in the left rail and edit its fields. Add, remove, or reorder experience and education entries to put your strongest work first.
 - Switch between the portfolio site and resume layout in the live preview.
 - Changes are saved in this browser on this device. No account or server is required.
-- **Export draft** downloads a JSON backup. **Save as PDF** opens the browser print dialog with the resume layout selected.
+- **Export draft** downloads a JSON backup; **Import draft** restores a valid OpenResume JSON backup after confirmation. **Save as PDF** opens the browser print dialog with the resume layout selected.
 - **Restore sample content** replaces the current draft after confirmation.
 
 Clearing this browser's site data will remove the saved draft, so export a JSON backup to keep a copy.
