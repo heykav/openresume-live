@@ -23,6 +23,7 @@ describe('OpenResume Live editor', () => {
     expect(screen.getByLabelText('Email')).toHaveAttribute('autocomplete', 'email')
     expect(screen.getByLabelText('Email')).toHaveAttribute('spellcheck', 'false')
     expect(screen.getByRole('heading', { name: 'Maya Chen.' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Krishna Anubhav' })).toHaveAttribute('href', 'https://krishnaanubhav.com')
     expect(screen.getByText('SAMPLE')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Portfolio' })).toHaveAttribute('aria-pressed', 'true')
   })
