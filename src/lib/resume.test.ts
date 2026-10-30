@@ -13,12 +13,24 @@ function createStorage(initial: Record<string, string> = {}): Storage {
   }
 }
 
+function legacyDraft(): Record<string, unknown> {
+  const draft: Record<string, unknown> = JSON.parse(JSON.stringify(DEFAULT_RESUME))
+  delete draft.linkedin
+  return draft
+}
+
 describe('resume draft storage', () => {
   it('validates imported JSON drafts before returning resume data', () => {
     expect(parseResumeJson(JSON.stringify(DEFAULT_RESUME))).toEqual(DEFAULT_RESUME)
+    expect(parseResumeJson(JSON.stringify(legacyDraft()))).toEqual(DEFAULT_RESUME)
     expect(() => parseResumeJson('{broken')).toThrow('The selected file is not valid JSON. Choose an OpenResume JSON backup.')
     expect(() => parseResumeJson(JSON.stringify({ name: 'Incomplete draft' })))
       .toThrow('The selected file is not a valid OpenResume draft. Choose a JSON backup exported from OpenResume.')
+  })
+
+  it('migrates older saved drafts that do not yet have a LinkedIn field', () => {
+    const saved = readResume(createStorage({ [STORAGE_KEY]: JSON.stringify(legacyDraft()) }))
+    expect(saved).toEqual({ resume: DEFAULT_RESUME, status: 'saved' })
   })
 
   it('starts with an independent sample draft when no saved content exists', () => {

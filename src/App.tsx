@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ChangeEvent, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import './App.css'
 import { DEFAULT_RESUME, parseResumeJson, readResume, saveResume, type EducationEntry, type ExperienceEntry, type Resume } from './lib/resume'
+import { extractResumeText, mapResumeTextToDraft } from './lib/document-import'
+import { safeLinkedInUrl, scoreResume, type ResumeScoreSection } from './lib/resume-score'
 
 type IconName = 'profile' | 'work' | 'school' | 'skills' | 'plus' | 'download' | 'print' | 'arrow' | 'chevron-up' | 'chevron-down' | 'close'
 type SectionId = 'profile' | 'experience' | 'education' | 'skills'
@@ -101,6 +103,8 @@ function ProfileEditor({ resume, update }: { resume: Resume; update: (key: keyof
           <Field label="Email" name="email" autoComplete="email" spellCheck={false} value={resume.email} onChange={(value) => update('email', value)} placeholder="you@example.com…" type="email" />
         </div>
         <Field label="Website" name="website" autoComplete="url" value={resume.website} onChange={(value) => update('website', value)} placeholder="yourwebsite.com…" type="url" />
+        <Field label="LinkedIn profile" name="linkedin" autoComplete="url" value={resume.linkedin} onChange={(value) => update('linkedin', value)} placeholder="https://linkedin.com/in/you…" type="url" />
+        <p className="field-hint">Add your profile link. OpenResume never signs in to or reads LinkedIn.</p>
         <TextArea label="About" name="about" value={resume.about} onChange={(value) => update('about', value)} placeholder="A short introduction, in your own words…" rows={5} />
         <p className="field-hint">Keep it human. A few clear sentences are plenty.</p>
       </div>
@@ -215,11 +219,12 @@ function SkillsEditor({ skills, setResume }: { skills: string[]; setResume: Disp
 function ResumePreview({ resume, onEdit }: { resume: Resume; onEdit: (section: SectionId) => void }) {
   const experience = resume.experience.filter((entry) => entry.role || entry.company || entry.details)
   const education = resume.education.filter((entry) => entry.school || entry.degree)
+  const linkedin = safeLinkedInUrl(resume.linkedin)
   return (
     <article className="portfolio-page resume-page">
       <header className="resume-header">
         <div><h2>{resume.name || 'Your name'}</h2><p>{resume.title || 'Your professional title'}</p></div>
-        <div className="resume-contact">{[resume.email, resume.location, resume.website].filter(Boolean).map((item) => <span key={item}>{item}</span>)}</div>
+        <div className="resume-contact">{[resume.email, resume.location, resume.website].filter(Boolean).map((item) => <span key={item}>{item}</span>)}{linkedin && <a href={linkedin} target="_blank" rel="noreferrer">LinkedIn</a>}</div>
       </header>
       {resume.about && <section className="resume-section"><div className="resume-section-heading"><h3>Profile</h3><button className="preview-edit-link" type="button" aria-label="Edit profile" onClick={() => onEdit('profile')}>Edit</button></div><p>{resume.about}</p></section>}
       {experience.length > 0 && <section className="resume-section"><div className="resume-section-heading"><h3>Experience</h3><button className="preview-edit-link" type="button" aria-label="Edit experience" onClick={() => onEdit('experience')}>Edit</button></div>{experience.map((entry) => <div className="resume-entry" key={entry.id}><div className="resume-entry-top"><h4>{entry.role || entry.company}</h4><span>{entry.dates}</span></div><p className="resume-entry-sub">{[entry.company, entry.location].filter(Boolean).join(' · ')}</p>{entry.details && <ul>{entry.details.split('\n').filter(Boolean).map((line, index) => <li key={`${entry.id}-${index}`}>{line}</li>)}</ul>}</div>)}</section>}
@@ -232,6 +237,7 @@ function ResumePreview({ resume, onEdit }: { resume: Resume; onEdit: (section: S
 function PortfolioPreview({ resume, onEdit }: { resume: Resume; onEdit: (section: SectionId) => void }) {
   const experience = resume.experience.filter((entry) => entry.role || entry.company || entry.details)
   const initials = resume.name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'YO'
+  const linkedin = safeLinkedInUrl(resume.linkedin)
   return (
     <article className="portfolio-page site-page">
       <header className="site-header"><span className="site-mark">{initials}</span><nav aria-label="Portfolio navigation"><button type="button" onClick={() => onEdit('experience')}>Work</button><button type="button" onClick={() => onEdit('profile')}>About</button>{resume.email && <button type="button" onClick={() => onEdit('profile')}>Contact</button>}</nav></header>
@@ -242,7 +248,7 @@ function PortfolioPreview({ resume, onEdit }: { resume: Resume; onEdit: (section
       <section className="site-intro"><div className="site-section-label"><span className="site-label">A LITTLE ABOUT ME</span><button className="preview-edit-link" type="button" aria-label="Edit profile" onClick={() => onEdit('profile')}>Edit</button></div><p>{resume.about || 'Add a few sentences about what you do and what you care about.'}</p></section>
       {experience.length > 0 && <section className="site-work"><div className="site-section-heading"><span className="site-label">SELECTED EXPERIENCE</span><div className="site-section-actions"><span className="site-count">{String(experience.length).padStart(2, '0')} ENTRIES</span><button className="preview-edit-link" type="button" aria-label="Edit experience" onClick={() => onEdit('experience')}>Edit</button></div></div>{experience.map((entry, index) => <article className="site-work-item" key={entry.id}><span className="work-number">{String(index + 1).padStart(2, '0')}</span><div><h3>{entry.role || entry.company}</h3><p>{entry.company}{entry.location ? ` · ${entry.location}` : ''}</p>{entry.details && <p className="work-detail">{entry.details.split('\n').filter(Boolean)[0]}</p>}</div><span className="work-dates">{entry.dates}</span></article>)}</section>}
       {resume.skills.length > 0 && <section className="site-skills"><div className="site-section-label"><span className="site-label">GOOD AT</span><button className="preview-edit-link" type="button" aria-label="Edit skills" onClick={() => onEdit('skills')}>Edit</button></div><div className="site-skill-list">{resume.skills.map((skill, index) => <span key={`${skill}-${index}`}>{skill}</span>)}</div></section>}
-      <footer className="site-footer">{resume.email ? <span>{resume.email}</span> : <span>Add your email to make it easy to get in touch.</span>}<span>Made with OpenResume by <a href="https://krishnaanubhav.com">Krishna Anubhav</a></span></footer>
+      <footer className="site-footer">{resume.email ? <span>{resume.email}</span> : <span>Add your email to make it easy to get in touch.</span>}{linkedin && <a href={linkedin} target="_blank" rel="noreferrer">LinkedIn profile</a>}<span>Made with OpenResume by <a href="https://krishnaanubhav.com">Krishna Anubhav</a></span></footer>
     </article>
   )
 }
@@ -252,10 +258,16 @@ function makeId(): string {
 }
 
 function sectionHasContent(resume: Resume, section: SectionId): boolean {
-  if (section === 'profile') return [resume.name, resume.title, resume.location, resume.email, resume.website, resume.about].some((value) => value.trim())
+  if (section === 'profile') return [resume.name, resume.title, resume.location, resume.email, resume.website, resume.linkedin, resume.about].some((value) => value.trim())
   if (section === 'experience') return resume.experience.some((entry) => Object.entries(entry).some(([key, value]) => key !== 'id' && value.trim()))
   if (section === 'education') return resume.education.some((entry) => Object.entries(entry).some(([key, value]) => key !== 'id' && value.trim()))
   return resume.skills.some((skill) => skill.trim())
+}
+
+interface ImportReview {
+  resume: Resume
+  sourceName: string
+  extractedText: string | null
 }
 
 function App() {
@@ -269,9 +281,25 @@ function App() {
   const resumeRef = useRef(resume)
   const pendingSave = useRef<number | null>(null)
   const importInput = useRef<HTMLInputElement>(null)
+  const importButton = useRef<HTMLButtonElement>(null)
+  const importReviewPanel = useRef<HTMLElement>(null)
+  const wasReviewingImport = useRef(false)
   const [importMessage, setImportMessage] = useState<string | null>(null)
+  const [importReview, setImportReview] = useState<ImportReview | null>(null)
+  const [isImporting, setIsImporting] = useState(false)
+  const resumeScore = scoreResume(resume)
   const startedSections = sections.filter(({ id }) => sectionHasContent(resume, id))
   resumeRef.current = resume
+
+  useEffect(() => {
+    if (importReview && !wasReviewingImport.current) {
+      wasReviewingImport.current = true
+      importReviewPanel.current?.focus()
+    } else if (!importReview && wasReviewingImport.current) {
+      wasReviewingImport.current = false
+      importButton.current?.focus()
+    }
+  }, [importReview])
 
   useEffect(() => {
     if (previousResume.current === resume) return
@@ -341,18 +369,60 @@ function App() {
     const file = input.files?.[0]
     if (!file) return
     setImportMessage(null)
+    setIsImporting(true)
     try {
-      if (file.size > 5_000_000) throw new Error('Choose a draft file smaller than 5 MB.')
-      const imported = parseResumeJson(await file.text())
-      if (!window.confirm('Replace your current draft with this imported draft? This cannot be undone.')) return
-      setResume(imported)
-      setActiveSection('profile')
-      setImportMessage(null)
+      if (file.name.toLowerCase().endsWith('.json')) {
+        if (file.size > 5_000_000) throw new Error('Choose a draft file smaller than 5 MB.')
+        setImportReview({ resume: parseResumeJson(await file.text()), sourceName: file.name, extractedText: null })
+      } else {
+        const extractedText = await extractResumeText(file)
+        setImportReview({ resume: mapResumeTextToDraft(extractedText), sourceName: file.name, extractedText })
+      }
     } catch (error) {
       setImportMessage(error instanceof Error ? error.message : 'Could not read the selected file.')
     } finally {
+      setIsImporting(false)
       input.value = ''
     }
+  }
+
+  const confirmImport = () => {
+    if (!importReview) return
+    setResume(importReview.resume)
+    setActiveSection('profile')
+    setMobilePane('edit')
+    setImportReview(null)
+    setImportMessage(null)
+  }
+
+  const updateImportProfile = (key: keyof Omit<Resume, 'experience' | 'education' | 'skills'>, value: string) => {
+    setImportReview((current) => current ? { ...current, resume: { ...current.resume, [key]: value } } : current)
+  }
+
+  const updateImportExperience = (index: number, key: keyof ExperienceEntry, value: string) => {
+    setImportReview((current) => current ? {
+      ...current,
+      resume: { ...current.resume, experience: current.resume.experience.map((entry, entryIndex) => entryIndex === index ? { ...entry, [key]: value } : entry) },
+    } : current)
+  }
+
+  const updateImportEducation = (index: number, key: keyof EducationEntry, value: string) => {
+    setImportReview((current) => current ? {
+      ...current,
+      resume: { ...current.resume, education: current.resume.education.map((entry, entryIndex) => entryIndex === index ? { ...entry, [key]: value } : entry) },
+    } : current)
+  }
+
+  const updateImportSkills = (value: string) => {
+    setImportReview((current) => current ? {
+      ...current,
+      resume: { ...current.resume, skills: value.split(',').map((skill) => skill.trim()).filter(Boolean) },
+    } : current)
+  }
+
+  const goToScoreSection = (section: ResumeScoreSection) => {
+    setActiveSection(section)
+    setMobilePane('edit')
   }
 
   const printResume = () => {
@@ -367,7 +437,8 @@ function App() {
           : 'Saved on this device'
 
   return (
-    <div className="app-shell">
+    <>
+    <div className="app-shell" inert={importReview !== null}>
       <a className="skip-link" href="#resume-editor">Skip to editor</a>
       <header className="topbar">
         <a className="brand" href={import.meta.env.BASE_URL} aria-label="OpenResume home"><span className="brand-symbol">o</span><span>openresume<span className="brand-period">.</span></span><span className="brand-live">LIVE</span></a>
@@ -387,6 +458,12 @@ function App() {
             <div className="coverage-track" role="progressbar" aria-label="Resume sections with content" aria-valuemin={0} aria-valuemax={sections.length} aria-valuenow={startedSections.length} aria-valuetext={`${startedSections.length} of ${sections.length} sections have content`}><span style={{ transform: `scaleX(${startedSections.length / sections.length})` }} /></div>
             <p>{startedSections.length === sections.length ? 'Every section has a starting point.' : `${sections.length - startedSections.length} ${sections.length - startedSections.length === 1 ? 'section needs' : 'sections need'} a starting point.`}</p>
           </div>
+          <details className="resume-score">
+            <summary><span><strong>Resume score</strong><small>Completeness checklist</small></span><b>{resumeScore.score}<i>/100</i></b></summary>
+            <div className="score-meter" role="progressbar" aria-label="Resume completeness score" aria-valuemin={0} aria-valuemax={100} aria-valuenow={resumeScore.score}><span style={{ transform: `scaleX(${resumeScore.score / 100})` }} /></div>
+            <p className="score-disclaimer">A writing checklist, not an ATS, hiring, or job-fit prediction.</p>
+            <div className="score-criteria">{resumeScore.criteria.map((criterion) => <button key={criterion.id} type="button" className={`score-criterion ${criterion.earned === criterion.possible ? 'complete' : ''}`} onClick={() => goToScoreSection(criterion.section)}><span><strong>{criterion.label}</strong><small>{criterion.earned === criterion.possible ? 'Looking good' : criterion.tip}</small></span><b>{criterion.earned}<i>/{criterion.possible}</i></b></button>)}</div>
+          </details>
           <nav className="section-nav" aria-label="Edit resume section">{sections.map((section, index) => {
             const started = startedSections.some(({ id }) => id === section.id)
             return <button className={`section-nav-item ${activeSection === section.id ? 'active' : ''}`} type="button" key={section.id} onClick={() => setActiveSection(section.id)} aria-label={`${section.label}, ${started ? 'has content' : 'empty'}`} aria-current={activeSection === section.id ? 'step' : undefined}><span className="nav-icon"><Icon name={section.icon} size={17} /></span><span className="nav-label">{section.label}</span><span className={`nav-status ${started ? 'started' : ''}`} aria-hidden="true">{started ? '•' : '—'}</span><span className="nav-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span></button>
@@ -394,10 +471,11 @@ function App() {
           <div className="rail-bottom">
             <div className="privacy-note"><span className="privacy-lock" aria-hidden="true">⌑</span><div><strong>Your draft stays yours.</strong><span>Your content stays in this browser.</span></div></div>
             <div className="rail-actions">
-              <button className="rail-action" type="button" onClick={() => importInput.current?.click()}>Import draft</button>
+              <button ref={importButton} className="rail-action" type="button" disabled={isImporting} onClick={() => importInput.current?.click()}>{isImporting ? 'Reading resume…' : 'Import resume'}</button>
               <button className="rail-action restore-button" type="button" onClick={restoreSample}>Restore sample content</button>
             </div>
-            <input ref={importInput} className="visually-hidden" type="file" accept=".json,application/json" aria-hidden="true" tabIndex={-1} onChange={importDraft} />
+            <p className="import-hint">PDF, DOCX, or OpenResume JSON · processed on this device</p>
+            <input ref={importInput} className="visually-hidden" type="file" accept=".pdf,.docx,.json,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/json" aria-hidden="true" tabIndex={-1} onChange={importDraft} />
             {importMessage && <p className="import-error" role="alert">{importMessage}</p>}
           </div>
         </aside>
@@ -418,6 +496,64 @@ function App() {
         </section>
       </div>
     </div>
+      {importReview && <div className="review-overlay"><section ref={importReviewPanel} className="import-review" role="dialog" aria-modal="true" aria-labelledby="import-review-title" tabIndex={-1} onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          setImportReview(null)
+        } else if (event.key === 'Tab') {
+          const focusable = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), summary, [tabindex]:not([tabindex="-1"])'))
+          const first = focusable[0]
+          const last = focusable[focusable.length - 1]
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault()
+            last?.focus()
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault()
+            first?.focus()
+          }
+        }
+      }}>
+        <h2 id="import-review-title">Review before replacing</h2>
+        <p className="review-source">{importReview.sourceName} · Edit detected fields below; your current draft stays unchanged until you confirm.</p>
+        <div className="import-review-fields">
+          <section className="import-review-section"><h3>Profile</h3><div className="form-stack">
+            <Field label="Import: full name" name="import-name" value={importReview.resume.name} onChange={(value) => updateImportProfile('name', value)} placeholder="Not detected" />
+            <Field label="Import: professional title" name="import-title" value={importReview.resume.title} onChange={(value) => updateImportProfile('title', value)} placeholder="Not detected" />
+            <div className="form-row">
+              <Field label="Import: location" name="import-location" value={importReview.resume.location} onChange={(value) => updateImportProfile('location', value)} placeholder="Not detected" />
+              <Field label="Import: email" name="import-email" type="email" value={importReview.resume.email} onChange={(value) => updateImportProfile('email', value)} placeholder="Not detected" />
+            </div>
+            <Field label="Import: website" name="import-website" type="url" value={importReview.resume.website} onChange={(value) => updateImportProfile('website', value)} placeholder="Not detected" />
+            <Field label="Import: LinkedIn profile" name="import-linkedin" type="url" value={importReview.resume.linkedin} onChange={(value) => updateImportProfile('linkedin', value)} placeholder="Not detected" />
+            <TextArea label="Import: about" name="import-about" value={importReview.resume.about} onChange={(value) => updateImportProfile('about', value)} placeholder="No summary detected" rows={3} />
+          </div></section>
+          <section className="import-review-section"><h3>Experience <span>{importReview.resume.experience.length}</span></h3>
+            {importReview.resume.experience.length ? importReview.resume.experience.map((entry, index) => <div className="form-stack import-review-entry" key={entry.id}>
+              <Field label={`Experience ${index + 1}: position`} name={`import-experience-${entry.id}-role`} value={entry.role} onChange={(value) => updateImportExperience(index, 'role', value)} placeholder="Not detected" />
+              <Field label={`Experience ${index + 1}: company`} name={`import-experience-${entry.id}-company`} value={entry.company} onChange={(value) => updateImportExperience(index, 'company', value)} placeholder="Not detected" />
+              <div className="form-row">
+                <Field label={`Experience ${index + 1}: dates`} name={`import-experience-${entry.id}-dates`} value={entry.dates} onChange={(value) => updateImportExperience(index, 'dates', value)} placeholder="Not detected" />
+                <Field label={`Experience ${index + 1}: location`} name={`import-experience-${entry.id}-location`} value={entry.location} onChange={(value) => updateImportExperience(index, 'location', value)} placeholder="Not detected" />
+              </div>
+              <TextArea label={`Experience ${index + 1}: highlights`} name={`import-experience-${entry.id}-details`} value={entry.details} onChange={(value) => updateImportExperience(index, 'details', value)} placeholder="No highlights detected" rows={3} />
+            </div>) : <p className="import-empty">No experience section detected.</p>}
+          </section>
+          <section className="import-review-section"><h3>Education <span>{importReview.resume.education.length}</span></h3>
+            {importReview.resume.education.length ? importReview.resume.education.map((entry, index) => <div className="form-stack import-review-entry" key={entry.id}>
+              <Field label={`Education ${index + 1}: school`} name={`import-education-${entry.id}-school`} value={entry.school} onChange={(value) => updateImportEducation(index, 'school', value)} placeholder="Not detected" />
+              <Field label={`Education ${index + 1}: qualification`} name={`import-education-${entry.id}-degree`} value={entry.degree} onChange={(value) => updateImportEducation(index, 'degree', value)} placeholder="Not detected" />
+              <Field label={`Education ${index + 1}: dates`} name={`import-education-${entry.id}-dates`} value={entry.dates} onChange={(value) => updateImportEducation(index, 'dates', value)} placeholder="Not detected" />
+            </div>) : <p className="import-empty">No education section detected.</p>}
+          </section>
+          <section className="import-review-section"><h3>Skills <span>{importReview.resume.skills.length}</span></h3>
+            <TextArea label="Import: skills" name="import-skills" value={importReview.resume.skills.join(', ')} onChange={updateImportSkills} placeholder="No skills detected" rows={3} />
+          </section>
+        </div>
+        {importReview.extractedText !== null && <details className="extracted-text"><summary>Review extracted text</summary><pre>{importReview.extractedText}</pre></details>}
+        <p className="review-privacy">Files are read in this browser only. We do not upload them or contact LinkedIn.</p>
+        <div className="review-actions"><button className="button button-outline" type="button" onClick={() => setImportReview(null)}>Cancel</button><button className="button button-primary" type="button" onClick={confirmImport}>Replace current draft</button></div>
+      </section></div>}
+    </>
   )
 }
 

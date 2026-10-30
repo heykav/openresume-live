@@ -1,4 +1,50 @@
 import { expect, test } from '@playwright/test'
+import JSZip from 'jszip'
+
+async function createDocxResume(): Promise<Buffer> {
+  const zip = new JSZip()
+  zip.file('[Content_Types].xml', `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`)
+  zip.file('_rels/.rels', `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`)
+  zip.file('word/document.xml', `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${[
+    'Avery Brooks',
+    'Product engineer',
+    'avery@example.com',
+    'SUMMARY',
+    'I build accessible tools and make complex workflows easier for teams.',
+    'EXPERIENCE',
+    'Senior Engineer',
+    'Northstar Labs',
+    '2021 - 2025',
+    'Improved task completion by 32%.',
+    'EDUCATION',
+    'Northstar University',
+    'BS, Computer Science',
+    'SKILLS',
+    'TypeScript, Accessibility, Testing, React',
+  ].map((text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`).join('')}<w:sectPr/></w:body></w:document>`)
+  return zip.generateAsync({ type: 'nodebuffer' })
+}
+
+function createPdfResume(): Buffer {
+  const content = `BT /F1 12 Tf 50 740 Td (Avery Brooks) Tj 0 -18 Td (Product engineer) Tj 0 -18 Td (avery@example.com) Tj 0 -30 Td (SUMMARY) Tj 0 -18 Td (I build reliable tools and make complex workflows easier for teams.) Tj 0 -30 Td (EXPERIENCE) Tj 0 -18 Td (Senior Engineer) Tj 0 -18 Td (Northstar Labs) Tj 0 -18 Td (2021 - 2025) Tj 0 -18 Td (Improved task completion by 32%.) Tj 0 -30 Td (EDUCATION) Tj 0 -18 Td (Northstar University) Tj 0 -18 Td (BS, Computer Science) Tj 0 -30 Td (SKILLS) Tj 0 -18 Td (TypeScript, Accessibility, Testing, React) Tj ET`
+  const stream = `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    stream,
+  ]
+  let document = '%PDF-1.4\n'
+  const offsets = [0]
+  objects.forEach((object, index) => {
+    offsets.push(Buffer.byteLength(document))
+    document += `${index + 1} 0 obj\n${object}\nendobj\n`
+  })
+  const xrefOffset = Buffer.byteLength(document)
+  document += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.slice(1).map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('')}trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`
+  return Buffer.from(document)
+}
 
 test.describe('OpenResume Live editor', () => {
   test('edits a profile and reflects changes in the portfolio preview', async ({ page }) => {
@@ -37,6 +83,26 @@ test.describe('OpenResume Live editor', () => {
     await expect(page.locator('.resume-contact')).toContainText('Toronto, Canada')
     await expect(page.locator('.resume-contact')).toContainText('jordan.example')
     await expect(page.locator('.resume-section').filter({ has: page.getByRole('heading', { name: 'Profile' }) })).toContainText('I make digital products clearer and more inclusive.')
+  })
+
+  test('scores resume completeness and navigates to the relevant section', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.locator('.resume-score summary > b')).toContainText('85')
+    await page.locator('.resume-score summary').click()
+    await page.getByRole('button', { name: /Measurable outcomes/ }).click()
+    await expect(page.getByRole('main').getByRole('heading', { name: 'Experience', exact: true })).toBeVisible()
+    await expect(page.getByText(/not an ATS, hiring, or job-fit prediction/i)).toBeVisible()
+  })
+
+  test('adds a LinkedIn profile link to the preview without scraping it', async ({ page }) => {
+    await page.goto('/')
+    await page.getByLabel('LinkedIn profile').fill('https://www.linkedin.com/in/avery-brooks')
+    if ((page.viewportSize()?.width ?? 0) <= 760) {
+      await page.getByRole('button', { name: 'See preview' }).click()
+    }
+    const profileLink = page.getByRole('link', { name: 'LinkedIn profile' })
+    await expect(profileLink).toHaveAttribute('href', 'https://www.linkedin.com/in/avery-brooks')
+    await expect(profileLink).toHaveAttribute('target', '_blank')
   })
 
   test('switches sections, adds a role, and opens the resume layout', async ({ page }) => {
@@ -237,7 +303,7 @@ test.describe('OpenResume Live editor', () => {
     }, { name, contents })
     await uploadDraft('broken.json', '{broken')
     await expect(page.getByRole('alert')).toHaveText('The selected file is not valid JSON. Choose an OpenResume JSON backup.')
-    await expect(page.getByLabel('Full name')).toHaveValue('Maya Chen')
+    await expect(page.getByLabel('Full name', { exact: true })).toHaveValue('Maya Chen')
 
     const imported = {
       name: 'Jordan Rivera',
@@ -250,8 +316,10 @@ test.describe('OpenResume Live editor', () => {
       education: [],
       skills: ['Inclusive design'],
     }
-    page.once('dialog', (dialog) => dialog.accept())
     await uploadDraft('openresume-draft.json', JSON.stringify(imported))
+    await expect(page.getByRole('dialog', { name: 'Review before replacing' }).getByLabel('Import: full name')).toHaveValue('Jordan Rivera')
+    await expect(page.getByLabel('Full name', { exact: true })).toHaveValue('Maya Chen')
+    await page.getByRole('button', { name: 'Replace current draft' }).click()
     await expect(page.getByLabel('Full name')).toHaveValue('Jordan Rivera')
     if ((page.viewportSize()?.width ?? 0) <= 760) {
       await page.getByRole('button', { name: 'See preview' }).click()
@@ -260,6 +328,45 @@ test.describe('OpenResume Live editor', () => {
     await expect(page.getByRole('status')).toHaveText('Saved on this device')
     await page.reload()
     await expect(page.getByLabel('Full name')).toHaveValue('Jordan Rivera')
+  })
+
+  test('extracts DOCX locally and lets the user review before replacing the draft', async ({ page }) => {
+    await page.goto('/')
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'avery-resume.docx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      buffer: await createDocxResume(),
+    })
+
+    const review = page.getByRole('dialog', { name: 'Review before replacing' })
+    await expect(review.getByLabel('Import: full name')).toHaveValue('Avery Brooks')
+    await expect(review.getByLabel('Import: email')).toHaveValue('avery@example.com')
+    await expect(review.locator('.extracted-text')).toContainText('Improved task completion by 32%.')
+    await review.getByLabel('Import: professional title').fill('Product systems engineer')
+    await expect(page.getByLabel('Full name', { exact: true })).toHaveValue('Maya Chen')
+    await page.getByRole('button', { name: 'Replace current draft' }).click()
+    await expect(page.getByLabel('Full name')).toHaveValue('Avery Brooks')
+    await expect(page.getByLabel('Professional title')).toHaveValue('Product systems engineer')
+    await page.getByRole('navigation', { name: 'Edit resume section' }).getByRole('button', { name: /^Experience,/ }).click()
+    await expect(page.getByLabel('Position')).toHaveValue('Senior Engineer')
+    await page.getByRole('navigation', { name: 'Edit resume section' }).getByRole('button', { name: /^Education,/ }).click()
+    await expect(page.getByLabel('School')).toHaveValue('Northstar University')
+  })
+
+  test('extracts selectable PDF text in-browser and previews the mapped fields', async ({ page }) => {
+    await page.goto('/')
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'avery-resume.pdf',
+      mimeType: 'application/pdf',
+      buffer: createPdfResume(),
+    })
+
+    const review = page.getByRole('dialog', { name: 'Review before replacing' })
+    await expect(review.getByLabel('Import: full name')).toHaveValue('Avery Brooks')
+    await expect(review.getByLabel('Import: email')).toHaveValue('avery@example.com')
+    await expect(review.locator('.extracted-text')).toContainText('Improved task completion by 32%.')
+    await page.getByRole('button', { name: 'Cancel' }).click()
+    await expect(page.getByLabel('Full name', { exact: true })).toHaveValue('Maya Chen')
   })
 
   test('wraps unusually long profile content without widening the preview', async ({ page }) => {

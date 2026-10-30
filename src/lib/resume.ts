@@ -20,6 +20,7 @@ export interface Resume {
   location: string
   email: string
   website: string
+  linkedin: string
   about: string
   experience: ExperienceEntry[]
   education: EducationEntry[]
@@ -36,6 +37,7 @@ export const DEFAULT_RESUME: Resume = {
   location: 'Brooklyn, New York',
   email: 'hello@mayachen.design',
   website: 'mayachen.design',
+  linkedin: '',
   about: 'I turn complex ideas into clear, thoughtful digital experiences. I care about good questions, useful details, and making technology feel a little more human.',
   experience: [
     {
@@ -80,6 +82,7 @@ function isResume(value: unknown): value is Resume {
   if (!isRecord(value)) return false
   const profileFields = ['name', 'title', 'location', 'email', 'website', 'about']
   if (!profileFields.every((field) => isString(value[field]))) return false
+  if (value.linkedin !== undefined && !isString(value.linkedin)) return false
   if (!Array.isArray(value.experience) || !Array.isArray(value.education) || !Array.isArray(value.skills)) return false
 
   const validExperience = value.experience.every((entry: unknown) =>
@@ -99,7 +102,7 @@ export function parseResumeJson(contents: string): Resume {
     throw new Error('The selected file is not valid JSON. Choose an OpenResume JSON backup.')
   }
   if (!isResume(parsed)) throw new Error('The selected file is not a valid OpenResume draft. Choose a JSON backup exported from OpenResume.')
-  return parsed
+  return { ...parsed, linkedin: parsed.linkedin ?? '' }
 }
 
 export function readResume(storage?: Storage): LoadedDraft {
@@ -111,7 +114,7 @@ export function readResume(storage?: Storage): LoadedDraft {
     if (!stored) return { resume: cloneDefault(), status: 'sample' }
     const parsed: unknown = JSON.parse(stored)
     return isResume(parsed)
-      ? { resume: parsed, status: 'saved' }
+      ? { resume: { ...parsed, linkedin: parsed.linkedin ?? '' }, status: 'saved' }
       : { resume: cloneDefault(), status: 'recovered' }
   } catch {
     return { resume: cloneDefault(), status: draftStorage ? 'recovered' : 'unavailable' }

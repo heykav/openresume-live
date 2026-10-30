@@ -16,10 +16,15 @@ npm run dev
 - Choose a section in the left rail and edit its fields. Add, remove, or reorder experience and education entries to put your strongest work first.
 - Switch between the portfolio site and resume layout in the live preview.
 - Changes are saved in this browser on this device. No account or server is required.
-- **Export draft** downloads a JSON backup; **Import draft** restores a valid OpenResume JSON backup after confirmation. **Save as PDF** opens the browser print dialog with the resume layout selected.
+- **Export draft** downloads a JSON backup; **Import resume** can read PDF and DOCX resumes locally, or restore an OpenResume JSON backup. Review the detected details before replacing your draft. Text extraction is best-effort; scanned-image PDFs are not supported.
+- Add a LinkedIn profile URL to show a safe external link in your preview. OpenResume does not sign in to, fetch, or scrape LinkedIn.
+- The resume score is a transparent 0–100 completeness checklist: profile basics (20), about (15), experience details (25), measurable outcomes (15), education (10), skills (10), and a portfolio or LinkedIn link (5). It is not an ATS score, job-fit assessment, or prediction of hiring outcomes. Use the criteria and tips to find details you may want to add.
+- **Save as PDF** opens the browser print dialog with the resume layout selected.
 - **Restore sample content** replaces the current draft after confirmation.
 
 Clearing this browser's site data will remove the saved draft, so export a JSON backup to keep a copy.
+
+PDF and DOCX files are parsed in your browser and are never uploaded. PDF import supports selectable text and up to 20 pages; each imported file must be smaller than 10 MB.
 
 ## Checks
 
